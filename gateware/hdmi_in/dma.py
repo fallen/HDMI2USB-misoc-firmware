@@ -5,6 +5,7 @@ from migen.bank.eventmanager import *
 from migen.flow.actor import *
 
 from misoclib.mem.sdram.frontend import dma_lasmi
+from misoclib.com.liteethmini.mac.core.crc import LiteEthMACCRC32 as CRC32
 
 
 # Slot status: EMPTY=0 LOADED=1 PENDING=2
@@ -70,6 +71,7 @@ class DMA(Module):
         fifo_word_width = bus_dw
         self.frame = Sink([("sof", 1), ("pixels", fifo_word_width)])
         self._frame_size = CSRStorage(bus_aw + alignment_bits, alignment_bits=alignment_bits)
+        self.crc = CSRStorage(32, write_from_dev=True)
         self.submodules._slot_array = _SlotArray(nslots, bus_aw, alignment_bits)
         self.ev = self._slot_array.ev
 
@@ -110,9 +112,12 @@ class DMA(Module):
 
         # control FSM
         fsm = FSM()
-        self.submodules += fsm
+        crcengine = CRC32(bus_dw)
+        self.submodules += fsm, crcengine
+
 
         fsm.act("WAIT_SOF",
+            crcengine.reset.eq(1),
             reset_words.eq(1),
             self.frame.ack.eq(~self._slot_array.address_valid | ~self.frame.sof),
             If(self._slot_array.address_valid & self.frame.sof & self.frame.stb, NextState("TRANSFER_PIXELS"))
@@ -122,12 +127,16 @@ class DMA(Module):
             If(self.frame.stb,
                 self._bus_accessor.address_data.stb.eq(1),
                 If(self._bus_accessor.address_data.ack,
+                    crcengine.ce.eq(1),
+                    crcengine.data.eq(self.frame.pixels),
                     count_word.eq(1),
                     If(last_word, NextState("EOF"))
                 )
             )
         )
         fsm.act("EOF",
+            self.crc.dat_w.eq(crcengine.value),
+            self.crc.we.eq(1),
             If(~self._bus_accessor.busy,
                 self._slot_array.address_done.eq(1),
                 NextState("WAIT_SOF")
@@ -135,4 +144,4 @@ class DMA(Module):
         )
 
     def get_csrs(self):
-        return [self._frame_size] + self._slot_array.get_csrs()
+        return [self._frame_size, self.crc] + self._slot_array.get_csrs()
