@@ -6,6 +6,7 @@
 #include <hw/flags.h>
 #include <system.h>
 #include <time.h>
+#include <crc.h>
 
 #include "pattern.h"
 #include "processor.h"
@@ -165,8 +166,16 @@ void pattern_fill_framebuffer(int h_active, int m_active)
 		if(color >= 0)
 			framebuffer[i] = color_bar[color];
 	}
+	framebuffer[h_active*m_active*2/4] = crc32(framebuffer, h_active*m_active*2/4);
+	printf("pattern CRC32: 0x%08x\n", framebuffer[h_active*m_active*2/4]);
 	pattern_draw_text(1, 1, "HDMI2USB");
 	pattern_draw_text(1, 2, "TimVideo.us");
+}
+
+void corrupt_pattern(void)
+{
+	volatile unsigned int *framebuffer = (unsigned int *)(MAIN_RAM_BASE + PATTERN_FRAMEBUFFER_BASE);
+	framebuffer[0] = 0x11223344;
 }
 
 void pattern_service(void)

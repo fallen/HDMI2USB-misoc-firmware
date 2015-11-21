@@ -3,13 +3,18 @@ from migen.genlib.fifo import AsyncFIFO
 from migen.genlib.cdc import MultiReg
 from migen.bank.description import *
 from migen.flow.actor import *
+from migen.flow.network import *
+from migen.genlib.cdc import BusSynchronizer
+from migen.actorlib import structuring
 
-from gateware.hdmi_out.format import bpc_phy, phy_layout
+from gateware.hdmi_out.format import bpc_phy, phy_layout, pixel_layout_s
 from gateware.hdmi_out import hdmi
 
 from gateware.csc.ycbcr2rgb import YCbCr2RGB
 from gateware.csc.ycbcr422to444 import YCbCr422to444
 from gateware.csc.ymodulator import YModulator
+from gateware.hdmi_out.crc import CRC32Checker
+
 
 class _FIFO(Module):
     def __init__(self, pack_factor):
@@ -209,14 +214,42 @@ class Driver(Module, AutoCSR):
         de_r = Signal()
         self.sync.pix += de_r.eq(fifo.pix_de)
 
+        self.submodules.crc_checker = RenameClockDomains(CRC32Checker(pixel_layout_s), "pix")
+        self.submodules.bs = BusSynchronizer(32, "pix", "sys")
+        self.submodules.bs2 = BusSynchronizer(32, "pix", "sys")
+        self.crc_error = Signal()
+        self.crc_value = Signal(32)
+        self.previous_crc_value = Signal(32)
+        self.output_crc_error_number = CSRStatus(32)
+        self.output_crc_value = CSRStatus(32)
+        self.previous_output_crc_value = CSRStatus(32)
+        self.specials += MultiReg(self.crc_checker.error, self.crc_error)
+
+        self.comb += [
+            self.crc_checker.sink.stb.eq(fifo.pix_de),
+            self.crc_checker.sink.sop.eq(fifo.pix_de & ~de_r),
+            self.crc_checker.sink.y.eq(fifo.pix_y),
+            self.crc_checker.sink.cb_cr.eq(fifo.pix_cb_cr),
+            self.bs.i.eq(self.crc_checker.crc_value),
+            self.crc_value.eq(self.bs.o),
+            self.bs2.i.eq(self.crc_checker.crc_value_r),
+            self.previous_crc_value.eq(self.bs2.o),
+        ]
+
+        self.sync += [
+            If(self.crc_checker.source.eop,
+                If(self.crc_error,
+                    self.output_crc_error_number.status.eq(self.output_crc_error_number.status + 1),
+                ),
+                self.output_crc_value.status.eq(self.crc_value),
+                self.previous_output_crc_value.status.eq(self.previous_crc_value),
+            )
+        ]
+
         chroma_upsampler = YCbCr422to444()
         self.submodules += RenameClockDomains(chroma_upsampler, "pix")
-        self.comb += [
-          chroma_upsampler.sink.stb.eq(fifo.pix_de),
-          chroma_upsampler.sink.sop.eq(fifo.pix_de & ~de_r),
-          chroma_upsampler.sink.y.eq(fifo.pix_y),
-          chroma_upsampler.sink.cb_cr.eq(fifo.pix_cb_cr)
-        ]
+
+        self.comb += Record.connect(self.crc_checker.source, chroma_upsampler.sink)
 
         ycbcr2rgb = YCbCr2RGB()
         self.submodules += RenameClockDomains(ycbcr2rgb, "pix")

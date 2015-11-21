@@ -116,4 +116,5 @@ void pll_dump(void)
 	}
 	printf("\n");
 #endif
+    printf("PLL_ADV status: 0x%1X\n", hdmi_out0_driver_clocking_status_read());
 }

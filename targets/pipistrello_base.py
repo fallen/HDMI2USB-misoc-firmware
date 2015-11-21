@@ -6,6 +6,7 @@ import struct
 from migen.fhdl.std import *
 from migen.genlib.resetsync import AsyncResetSynchronizer
 from migen.bus import wishbone
+from mibuild.generic_platform import Pins, IOStandard
 
 from misoclib.mem.sdram.module import MT46H32M16
 from misoclib.mem.sdram.phy import s6ddrphy
@@ -64,12 +65,13 @@ class _CRG(Module):
                                      p_CLKOUT1_PHASE=0., p_CLKOUT1_DIVIDE=p//4,
                                      p_CLKOUT2_PHASE=270., p_CLKOUT2_DIVIDE=p//2,  # sdram dqs adr ctrl
                                      p_CLKOUT3_PHASE=250., p_CLKOUT3_DIVIDE=p//2,  # off-chip ddr
-                                     p_CLKOUT4_PHASE=0., p_CLKOUT4_DIVIDE=p//1,
+                                     p_CLKOUT4_PHASE=0., p_CLKOUT4_DIVIDE=p//1,  # base50
                                      p_CLKOUT5_PHASE=0., p_CLKOUT5_DIVIDE=p//1,  # sys
         )
         self.specials += Instance("BUFG", i_I=pll[5], o_O=self.cd_sys.clk)
         reset = platform.request("user_btn")
-        self.comb += self.cd_base50.clk.eq(clk50a)
+        #self.comb += self.cd_base50.clk.eq(clk50a)
+        self.specials += Instance("BUFG", i_I=pll[4], o_O=self.cd_base50.clk)
         por = Signal(max=1 << 11, reset=(1 << 11) - 1)
         self.specials += AsyncResetSynchronizer(self.cd_base50, por > 0)
         self.sync.por += If(por != 0, por.eq(por - 1))
@@ -112,6 +114,10 @@ def _get_firmware_data(firmware_filename):
     except:
         pass
     return data
+
+papilio_adapter_io = [
+    ("debug_ios", 0, Pins("C:0 C:1 C:2 C:3 C:4 C:5 C:6 C:7 C:8 C:9 C:10 C:11 C:12 C:13 C14"), IOStandard("LVTTL")),
+]
 
 
 class BaseSoC(SDRAMSoC):
@@ -164,6 +170,7 @@ class BaseSoC(SDRAMSoC):
             self.flash_boot_address = 0x180000
             self.register_rom(self.spiflash.bus, 0x1000000)
         platform.add_platform_command("""PIN "hdmi_out_pix_bufg.O" CLOCK_DEDICATED_ROUTE = FALSE;""")
+        platform.add_platform_command("""INST "hdmi_out_pix_bufg" LOC = BUFGMUX_X2Y1;""")
 
 _hdmi_infos = {
     "HDMI_OUT0_MNEMONIC": "J4",
@@ -182,6 +189,24 @@ class VideomixerSoC(BaseSoC):
         BaseSoC.__init__(self, platform, **kwargs)
         self.submodules.hdmi_out0 = HDMIOut(platform.request("hdmi", 0),
                                             self.sdram.crossbar.get_master())
+
+        platform.add_extension(papilio_adapter_io)
+        debug_ios = platform.request("debug_ios")
+
+        self.comb += [
+            debug_ios[0].eq(self.hdmi_out0.driver.crc_checker.sink.sop),
+            debug_ios[1].eq(self.hdmi_out0.driver.crc_checker.sink.stb),
+            debug_ios[2].eq(self.hdmi_out0.driver.crc_checker.sink.ack),
+            debug_ios[3].eq(self.hdmi_out0.driver.crc_checker.sink.eop),
+            debug_ios[4].eq(self.hdmi_out0.driver.crc_checker.fifo.source.sop),
+            debug_ios[5].eq(self.hdmi_out0.driver.crc_checker.fifo.source.stb),
+            debug_ios[6].eq(self.hdmi_out0.driver.crc_checker.fifo.source.ack),
+            debug_ios[7].eq(self.hdmi_out0.driver.crc_checker.fifo.source.eop),
+            debug_ios[8].eq(self.hdmi_out0.driver.crc_checker.source.sop),
+            debug_ios[9].eq(self.hdmi_out0.driver.crc_checker.source.stb),
+            debug_ios[10].eq(self.hdmi_out0.driver.crc_checker.source.ack),
+            debug_ios[11].eq(self.hdmi_out0.driver.crc_checker.source.eop),
+        ]
 
         for k, v in _hdmi_infos.items():
             self.add_constant(k, v)

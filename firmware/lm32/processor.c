@@ -319,7 +319,7 @@ static void fb_set_mode(const struct video_timing *mode)
 	hdmi_out0_fi_vsync_end_write(mode->v_active + mode->v_sync_offset + mode->v_sync_width);
 	hdmi_out0_fi_vscan_write(mode->v_active + mode->v_blanking);
 
-	hdmi_out0_fi_length_write(mode->h_active*mode->v_active*2);
+	hdmi_out0_fi_length_write(mode->h_active*mode->v_active*2 + 4);
 #endif
 
 #ifdef CSR_HDMI_OUT1_BASE
@@ -332,7 +332,7 @@ static void fb_set_mode(const struct video_timing *mode)
 	hdmi_out1_fi_vsync_end_write(mode->v_active + mode->v_sync_offset + mode->v_sync_width);
 	hdmi_out1_fi_vscan_write(mode->v_active + mode->v_blanking);
 
-	hdmi_out1_fi_length_write(mode->h_active*mode->v_active*2);
+	hdmi_out1_fi_length_write(mode->h_active*mode->v_active*2 + 4);
 #endif
 
 	fb_clkgen_write(0x1, clock_d-1);

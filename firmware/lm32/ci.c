@@ -17,6 +17,12 @@
 
 int status_enabled;
 
+void debug_crc(void) {
+    printf("hdmi out CRC error number: 0x%08x\n", hdmi_out0_driver_output_crc_error_number_read());
+    printf("hdmi out CRC value: 0x%08X\n", hdmi_out0_driver_output_crc_value_read());
+    printf("hdmi out previous CRC value: 0x%08X\n", hdmi_out0_driver_previous_output_crc_value_read());
+}
+
 void print_board_dna(void) {
 	int i;
 	printf("Board's DNA: ");
@@ -597,6 +603,10 @@ void ci_service(void)
 			debug_ddr();
 		else if(strcmp(token, "dna") == 0)
 			print_board_dna();
+		else if(strcmp(token, "crc") == 0)
+		    debug_crc();
+		else if(strcmp(token, "corrupt") == 0)
+		    corrupt_pattern();
 		else
 			help_debug();
 	} else {
