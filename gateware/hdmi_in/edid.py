@@ -4,6 +4,7 @@ from migen.genlib.cdc import MultiReg
 from migen.genlib.fsm import FSM, NextState
 from migen.genlib.misc import chooser
 from migen.bank.description import CSRStorage, CSRStatus, AutoCSR
+from migen.bank.eventmanager import EventManager, EventSourceProcess, _EventSource
 
 _default_edid = [
     0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x3D, 0x17, 0x32, 0x12, 0x2A, 0x6A, 0xBF, 0x00,
@@ -17,11 +18,45 @@ _default_edid = [
 ]
 
 
+# EventSource which raises an IRQ on both rising and falling edge
+# of the trigger
+class EventSourceEdge(Module, _EventSource):
+    def __init__(self, trigger_reset_value=0):
+        _EventSource.__init__(self)
+        self.captured_trigger = Signal()
+        self.trigger_r = Signal(reset=trigger_reset_value)
+
+        self.comb += [
+            self.status.eq(self.captured_trigger),
+        ]
+
+        self.sync += [
+            If(~self.pending & (self.trigger_r ^ self.trigger),
+               self.pending.eq(1),
+               self.captured_trigger.eq(self.trigger),
+            ),
+            If(self.clear,
+               self.pending.eq(0),
+            ),
+            self.trigger_r.eq(self.trigger),
+        ]
+
+
+class EDIDIrq(Module, AutoCSR):
+    def __init__(self):
+        self.submodules.ev = EventManager()
+
+    def finalize(self, *args, **kwargs):
+        self.ev.finalize()
+        Module.finalize(self, *args, **kwargs)
+
+
 class EDID(Module, AutoCSR):
     def __init__(self, pads, default=_default_edid):
         self._hpd_notif = CSRStatus()
         self._hpd_en = CSRStorage()
         self.specials.mem = Memory(8, 128, init=default)
+        self.edid_read_started = EventSourceEdge(trigger_reset_value=1)
 
         ###
 
@@ -129,6 +164,10 @@ class EDID(Module, AutoCSR):
         self.sync += If(data_drv_en, chooser(rdport.dat_r, counter, data_bit, 8, reverse=True))
 
         self.submodules.fsm = fsm = FSM()
+
+        # Will trig an IRQ on the falling edge of edid_read_started signal
+        # i.e. when leaving the WAIT_START state meaning EDID is being read
+        self.comb += self.edid_read_started.trigger.eq(fsm.ongoing("WAIT_START"))
 
         fsm.act("WAIT_START")
         fsm.act("RCV_ADDRESS",

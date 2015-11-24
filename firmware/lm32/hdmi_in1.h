@@ -6,6 +6,7 @@ extern int hdmi_in1_fb_index;
 
 unsigned int hdmi_in1_framebuffer_base(char n);
 
+void hdmi_in1_edid_isr(void);
 void hdmi_in1_isr(void);
 void hdmi_in1_init_video(int hres, int vres);
 void hdmi_in1_disable(void);

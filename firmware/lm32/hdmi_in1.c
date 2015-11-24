@@ -33,6 +33,33 @@ static int hdmi_in1_hres, hdmi_in1_vres;
 
 extern void processor_update(void);
 
+static int hdmi_in1_edid_started = 0;
+static int hdmi_in1_edid_finished = 0;
+
+void hdmi_in1_edid_isr(void)
+{
+    static int edid_read_start_time;
+    static int edid_read_finished_time;
+
+    if(hdmi_in1_edid_ev_status_read()) {
+        elapsed(&edid_read_start_time, -1);
+        edid_read_finished_time = edid_read_start_time;
+        if(hdmi_in1_debug)
+            printf("hdmi_in1: reading EDID\n");
+        hdmi_in1_edid_started = 1;
+    } else {
+        elapsed(&edid_read_finished_time, 0);
+        if(edid_read_finished_time - edid_read_start_time < 0)
+            edid_read_finished_time += timer0_reload_read();
+        if(hdmi_in1_debug) {
+            int dt = edid_read_finished_time - edid_read_start_time;
+            printf("hdmi_in1: finished reading EDID after %d ns\n", dt*1.0e9/(identifier_frequency_read()));
+        }
+        hdmi_in1_edid_finished = 1;
+    }
+    hdmi_in1_edid_ev_pending_write(1); // clearing IRQ pending flag
+}
+
 void hdmi_in1_isr(void)
 {
 	int fb_index = -1;

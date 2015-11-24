@@ -5,6 +5,8 @@ from gateware.hdmi_in import HDMIIn
 from gateware.hdmi_out import HDMIOut
 from gateware.encoder import EncoderReader, Encoder
 from gateware.streamer import USBStreamer
+from gateware.hdmi_in.edid import EDIDIrq
+
 
 class VideomixerSoC(BaseSoC):
     csr_map = {
@@ -14,12 +16,16 @@ class VideomixerSoC(BaseSoC):
         "hdmi_in0_edid_mem": 23,
         "hdmi_in1":          24,
         "hdmi_in1_edid_mem": 25,
+        "hdmi_in0_edid":     26,
+        "hdmi_in1_edid":     27,
     }
     csr_map.update(BaseSoC.csr_map)
 
     interrupt_map = {
         "hdmi_in0": 3,
         "hdmi_in1": 4,
+        "hdmi_in0_edid": 5,
+        "hdmi_in1_edid": 6,
     }
     interrupt_map.update(BaseSoC.interrupt_map)
 
@@ -37,6 +43,12 @@ class VideomixerSoC(BaseSoC):
                                             self.sdram.crossbar.get_master(),
                                             self.hdmi_out0.driver.clocking) # share clocking with hdmi_out0
                                                                             # since no PLL_ADV left.
+
+        self.submodules.hdmi_in0_edid = EDIDIrq()
+        self.hdmi_in0_edid.ev.edid_read = self.hdmi_in0.edid.edid_read_started
+
+        self.submodules.hdmi_in1_edid = EDIDIrq()
+        self.hdmi_in1_edid.ev.edid_read = self.hdmi_in1.edid.edid_read_started
 
         platform.add_platform_command("""INST PLL_ADV LOC=PLL_ADV_X0Y0;""") # all PLL_ADV are used: router needs help...
         platform.add_platform_command("""PIN "hdmi_out_pix_bufg.O" CLOCK_DEDICATED_ROUTE = FALSE;""")
@@ -56,8 +68,8 @@ TIMESPEC "TSise_sucks10" = FROM "GRPsys_clk" TO "GRPpix1_clk" TIG;
 
 class HDMI2USBSoC(VideomixerSoC):
     csr_map = {
-        "encoder_reader": 26,
-        "encoder":        27
+        "encoder_reader": 28,
+        "encoder":        29
     }
     csr_map.update(VideomixerSoC.csr_map)
     mem_map = {
