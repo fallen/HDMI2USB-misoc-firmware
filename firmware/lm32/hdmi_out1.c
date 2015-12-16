@@ -119,25 +119,25 @@ void hdmi_out1_print_edid(void) {
     unsigned char sum = 0;
 
     hdmi_out1_i2c_start_cond();
-    b = hdmi_out1_i2c_write(0xa0);
+    b = hdmi_out1_i2c_write(EDID_EEPROM_I2C_WRITE_ADDR); // issuing an I2C write
     if (!b && hdmi_out1_debug_enabled)
         printf("hdmi_out1: NACK while writing slave address!\n");
-    b = hdmi_out1_i2c_write(0x00);
+    b = hdmi_out1_i2c_write(0); // setting the eeprom address register to 0
     if (!b && hdmi_out1_debug_enabled)
         printf("hdmi_out1: NACK while writing eeprom address!\n");
     hdmi_out1_i2c_start_cond();
-    b = hdmi_out1_i2c_write(0xa1);
+    b = hdmi_out1_i2c_write(EDID_EEPROM_I2C_READ_ADDR); // issuing I2C reads
     if (!b && hdmi_out1_debug_enabled)
         printf("hdmi_out1: NACK while writing slave address (2)!\n");
-    for (eeprom_addr = 0 ; eeprom_addr < 128 ; eeprom_addr++) {
-        b = hdmi_out1_i2c_read(eeprom_addr == 127 && extension_number == 0 ? 0 : 1);
+    for (eeprom_addr = 0 ; eeprom_addr < EDID_BLOCK_SIZE ; eeprom_addr++) {
+        b = hdmi_out1_i2c_read(eeprom_addr == EDID_BLOCK_SIZE-1 && extension_number == 0 ? 0 : 1);
         sum +=b;
         printf("%02X ", b);
         if(!((eeprom_addr+1) % 16))
             printf("\n");
-        if(eeprom_addr == 126)
+        if(eeprom_addr == EDID_BLOCK0_EXT_NUMBER_OFFSET)
             extension_number = b;
-        if(eeprom_addr == 127 && sum != 0)
+        if(eeprom_addr == EDID_BLOCK_CHECKSUM_OFFSET && sum != 0)
         {
             printf("Checksum ERROR in EDID block 0\n");
             hdmi_out1_i2c_stop_cond();
@@ -148,13 +148,13 @@ void hdmi_out1_print_edid(void) {
     {
         printf("\n");
         sum = 0;
-        for (eeprom_addr = 0 ; eeprom_addr < 128 ; eeprom_addr++) {
-            b = hdmi_out1_i2c_read(eeprom_addr == 127 && e == extension_number - 1 ? 0 : 1);
+        for (eeprom_addr = 0 ; eeprom_addr < EDID_BLOCK_SIZE ; eeprom_addr++) {
+            b = hdmi_out1_i2c_read(eeprom_addr == EDID_BLOCK_SIZE-1 && e == extension_number - 1 ? 0 : 1);
             sum += b;
             printf("%02X ", b);
             if(!((eeprom_addr+1) % 16))
                 printf("\n");
-            if(eeprom_addr == 127 && sum != 0)
+            if(eeprom_addr == EDID_BLOCK_CHECKSUM_OFFSET && sum != 0)
             {
                 printf("Checksum ERROR in EDID extension block %d\n", e);
                 hdmi_out1_i2c_stop_cond();
