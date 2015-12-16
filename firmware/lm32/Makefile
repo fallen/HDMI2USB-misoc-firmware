@@ -36,6 +36,28 @@ main.o: main.c
 %.o: %.S
 	$(assemble)
 
+define gen0
+@echo " GEN " $@
+@sed -e "s/CSR_HDMI_OUTX_I2C_W_ADDR/CSR_HDMI_OUT0_I2C_W_ADDR/g;s/hdmi_outX/hdmi_out0/g" $< > $@
+endef
+
+define gen1
+@echo " GEN " $@
+@sed -e "s/CSR_HDMI_OUTX_I2C_W_ADDR/CSR_HDMI_OUT1_I2C_W_ADDR/g;s/hdmi_outX/hdmi_out1/g" $< > $@
+endef
+
+hdmi_out0.c: hdmi_outX.c
+	$(gen0)
+
+hdmi_out0.h: hdmi_outX.h
+	$(gen0)
+
+hdmi_out1.c: hdmi_outX.c
+	$(gen1)
+
+hdmi_out1.h: hdmi_outX.h
+	$(gen1)
+
 libs:
 	$(MAKE) -C $(MSCDIR)/software/libcompiler-rt
 	$(MAKE) -C $(MSCDIR)/software/libbase
