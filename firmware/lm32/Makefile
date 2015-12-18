@@ -58,6 +58,8 @@ hdmi_out1.c: hdmi_outX.c
 hdmi_out1.h: hdmi_outX.h
 	$(gen1)
 
+ci.o hdmi_out0.o hdmi_out1.o: hdmi_out0.h hdmi_out1.h
+
 libs:
 	$(MAKE) -C $(MSCDIR)/software/libcompiler-rt
 	$(MAKE) -C $(MSCDIR)/software/libbase
