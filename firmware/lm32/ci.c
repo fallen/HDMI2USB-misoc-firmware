@@ -14,8 +14,12 @@
 #include "pll.h"
 #include "ci.h"
 #include "encoder.h"
+#ifdef CSR_HDMI_OUT0_I2C_W_ADDR
 #include "hdmi_out0.h"
+#endif
+#ifdef CSR_HDMI_OUT1_I2C_W_ADDR
 #include "hdmi_out1.h"
+#endif
 
 int status_enabled;
 
